@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0D2E5A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Painel do Presidente - CMS</title>
+
+  <!-- PWA Manifest Injector (Será preenchido pelo JS) -->
+  <link rel="manifest" id="pwa-manifest">
+  <link rel="apple-touch-icon" href="https://cmsmoc.github.io/secretariaexecutiva/logo/iconcms512.png">
+
+  <!-- Fontes -->
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700;900&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+  
+  <!-- Ícones (Phosphor Icons) -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React & Babel Standalone -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    :root {
+      --cms-navy: #0D2E5A;
+      --cms-blue: #1B6CB5;
+      --cms-green: #1E8A4A;
+      --cms-yellow: #F5C400;
+    }
+    body { font-family: 'Open Sans', sans-serif; background-color: #F7F8FA; -webkit-tap-highlight-color: transparent; }
+    .font-display { font-family: 'Montserrat', sans-serif; }
+    .swiss-shadow { box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+    .swiss-eyebrow { letter-spacing: 2.5px; text-transform: uppercase; font-size: 10px; font-weight: 700; }
+    .swiss-stat { letter-spacing: -3px; line-height: 0.95; }
+    
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #F7F8FA; }
+    ::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 4px; }
+    
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-slide-down { animation: slideDown 0.3s ease forwards; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Script que gera o PWA Dinamicamente -->
+  <script>
+    // 1. Criar Manifesto PWA
+    const manifest = {
+      name: "Painel do Presidente - CMS Montes Claros",
+      short_name: "Gabinete CMS",
+      description: "Painel de controle para o presidente do Conselho Municipal de Saúde",
+      start_url: window.location.href,
+      display: "standalone",
+      background_color: "#F7F8FA",
+      theme_color: "#0D2E5A",
+      icons: [{
+        src: "https://cmsmoc.github.io/secretariaexecutiva/logo/iconcms512.png",
+        sizes: "512x512",
+        type: "image/png"
+      }]
+    };
+    const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+    document.getElementById('pwa-manifest').href = URL.createObjectURL(manifestBlob);
+
+    // 2. Registrar Service Worker para permitir instalação
+    // CORREÇÃO: Removido o hack do Blob que causava o erro TypeError no console.
+    // Para funcionar offline no celular no futuro, crie um arquivo físico 'sw.js' no Github.
+    if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+      navigator.serviceWorker.register('./sw.js').catch(console.warn);
+    }
+  </script>
+
+  <!-- Código da Aplicação React -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbxvZkVyb0KtSIAl7OZXhnEH8iXeaL3VeC4OcNghMVZpRJoSRZbZBr6U8O2EVPfP1vNu/exec';
+    const LOGO_ICON = 'https://cmsmoc.github.io/secretariaexecutiva/logo/iconcms512.png';
+
+    function App() {
+      const [data, setData] = useState({ documentos: [], mensagens: [], agenda: [] });
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+      const [uploadModalOpen, setUploadModalOpen] = useState(false);
+      const [uploading, setUploading] = useState(false);
+      const [updating, setUpdating] = useState(false);
+      
+      const fileInputRef = useRef(null);
+      const [formDoc, setFormDoc] = useState({ titulo: '', tipo: 'ATA', urgente: 'NÃO' });
+
+      const fetchData = async () => {
+        setLoading(true); setError(null);
+        try {
+          const response = await fetch(`${GAS_URL}?action=getData`);
+          const result = await response.json();
+          if (result.status === 'success') {
+            setData(result.data);
+          } else {
+            setError('Falha ao ler dados da planilha.');
+          }
+        } catch (err) {
+          console.error(err);
+          setError('Erro de conexão. Simulando dados...');
+          // MOCK DATA FALLBACK
+          setData({
+            documentos: [
+              { ID: '1', Título: 'Ata 463ª Reunião', Data: '04/04/2026', Tipo: 'ATA', Urgente: 'SIM', Status: 'Pendente' },
+              { ID: '2', Título: 'Ofício 045/2026', Data: '02/04/2026', Tipo: 'OFÍCIO', Urgente: 'NÃO', Status: 'Pendente' },
+              { ID: '3', Título: 'Regimento Interno', Data: '15/03/2026', Tipo: 'REGIMENTO', Urgente: 'NÃO', Status: 'Arquivado' }
+            ],
+            mensagens: [
+              { ID: '1', Remetente: 'Secretaria Municipal', Assunto: 'Resposta Ofício 040', Data: 'Hoje', Status: 'Nova' }
+            ],
+            agenda: [
+              { ID: '1', Data: '10/04/2026', Horário: '08:00', Compromisso: 'Reunião Diretoria', Local: 'Gabinete' }
+            ]
+          });
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      useEffect(() => { fetchData(); }, []);
+
+      const handleUpload = async (e) => {
+        e.preventDefault();
+        const file = fileInputRef.current.files[0];
+        if (!file || !formDoc.titulo) return;
+
+        setUploading(true);
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64Data = reader.result;
+          const payload = {
+            action: 'uploadDocumento',
+            fileBase64: base64Data,
+            fileName: file.name,
+            mimeType: file.type,
+            titulo: formDoc.titulo,
+            tipo: formDoc.tipo,
+            urgente: formDoc.urgente
+          };
+
+          try {
+            const response = await fetch(GAS_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (result.status === 'success') {
+              setUploadModalOpen(false);
+              setFormDoc({ titulo: '', tipo: 'ATA', urgente: 'NÃO' });
+              fetchData();
+            } else { alert('Erro: ' + result.message); }
+          } catch (err) {
+            alert('Falha na comunicação. Simulação concluída.');
+            setUploadModalOpen(false);
+          } finally { setUploading(false); }
+        };
+        reader.readAsDataURL(file);
+      };
+
+      const handleStatusUpdate = async (id, aba, novoStatus) => {
+        setUpdating(true);
+        const payload = { action: 'atualizarStatus', id, aba, novoStatus };
+        try {
+          const response = await fetch(GAS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+          });
+          const result = await response.json();
+          if (result.status === 'success') fetchData();
+        } catch (err) {
+          // Atualização Visual (Mock) caso dê erro de CORS
+          if (aba === 'Documentos') {
+            setData(prev => ({...prev, documentos: prev.documentos.map(d => d.ID === id ? {...d, Status: novoStatus} : d)}));
+          } else {
+            setData(prev => ({...prev, mensagens: prev.mensagens.map(m => m.ID === id ? {...m, Status: novoStatus} : m)}));
+          }
+        } finally { setUpdating(false); }
+      };
+
+      const pendingDocs = data.documentos.filter(d => d.Status && d.Status.toUpperCase() === 'PENDENTE');
+      const archiveDocs = data.documentos.filter(d => d.Status && d.Status.toUpperCase() !== 'PENDENTE');
+      const newMessages = data.mensagens.filter(m => m.Status && m.Status.toUpperCase() === 'NOVA');
+      const oldMessages = data.mensagens.filter(m => m.Status && m.Status.toUpperCase() !== 'NOVA');
+
+      return (
+        <div className="min-h-screen flex flex-col pb-24">
+          
+          {updating && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-white/50 backdrop-blur-sm">
+              <div className="bg-[#0D2E5A] text-white px-6 py-3 rounded-lg font-display text-sm font-bold shadow-2xl flex items-center gap-3">
+                <i className="ph ph-spinner animate-spin text-xl"></i> Sincronizando...
+              </div>
+            </div>
+          )}
+
+          {/* NAVBAR */}
+          <nav className="bg-[#0D2E5A] sticky top-0 z-50 px-4 md:px-8 h-16 flex items-center justify-between shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="bg-white p-1 rounded-full shadow-inner flex items-center justify-center w-8 h-8">
+                <img src={LOGO_ICON} alt="Logo CMS" className="w-6 h-6 object-contain" />
+              </div>
+              <div className="font-display font-bold text-[11px] tracking-[2px] uppercase text-white leading-tight">
+                Painel<br/><span className="text-[#F5C400]">Presidente</span>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <button onClick={fetchData} className="text-white/70 hover:text-white transition-colors">
+                <i className={`ph ph-clock text-xl ${loading ? "animate-spin text-[#F5C400]" : ""}`}></i>
+              </button>
+              
+              <button 
+                onClick={() => setAgendaOpen(!agendaOpen)}
+                className={`px-4 py-1.5 rounded-full font-display text-[10px] font-bold tracking-wider uppercase transition-colors flex items-center gap-2 border ${agendaOpen ? 'bg-[#F5C400] text-[#0D2E5A] border-[#F5C400]' : 'bg-[#111827] text-white border-white/10 hover:border-[#F5C400]'}`}
+              >
+                Agenda <i className={`ph ${agendaOpen ? 'ph-caret-up' : 'ph-caret-down'}`}></i>
+              </button>
+            </div>
+          </nav>
+
+          {/* CONTEÚDO PRINCIPAL */}
+          <main className="flex-1 w-full max-w-[1080px] mx-auto p-4 md:p-8">
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl mb-6 text-sm flex items-start gap-3">
+                <i className="ph ph-warning-circle text-xl"></i><p>{error}</p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
+              
+              {/* AGENDA (BLOCO TOPO EXPANSÍVEL) */}
+              <div className="md:col-span-12 bg-white border border-[#E5E7EB] rounded-xl p-6 md:p-8 swiss-shadow">
+                <div 
+                  className={`flex justify-between items-center cursor-pointer transition-opacity hover:opacity-80 ${agendaOpen ? 'mb-6 border-b border-[#E5E7EB] pb-4' : ''}`}
+                  onClick={() => setAgendaOpen(!agendaOpen)}
+                >
+                  <div>
+                    <p className="font-display swiss-eyebrow text-[#1B6CB5] mb-1">Próximos Compromissos</p>
+                    <h2 className="font-display font-bold text-xl text-[#111827]">Agenda Presidencial</h2>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <i className="ph ph-calendar-blank text-[#1B6CB5] text-3xl hidden sm:block"></i>
+                    <div className={`bg-[#F7F8FA] p-2 rounded-full text-[#1B6CB5] transition-transform duration-300 ${agendaOpen ? 'rotate-180' : ''}`}>
+                      <i className="ph ph-caret-down text-xl"></i>
+                    </div>
+                  </div>
+                </div>
+                
+                {agendaOpen && (
+                  <div className="animate-slide-down origin-top">
+                    {loading ? (
+                      <div className="py-4 flex justify-center"><i className="ph ph-spinner animate-spin text-[#1B6CB5] text-2xl"></i></div>
+                    ) : data.agenda.length === 0 ? (
+                      <p className="text-sm text-[#6B7280] py-2">Nenhum compromisso agendado no momento.</p>
+                    ) : (
+                      <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {data.agenda.map((item, i) => (
+                          <div key={i} className="bg-[#F7F8FA] border border-[#E5E7EB] rounded-lg p-4 border-l-4 border-l-[#F5C400]">
+                            <div className="flex justify-between items-start mb-2">
+                              <span className="font-display text-[10px] font-bold tracking-wider text-[#1B6CB5]">{item.Data}</span>
+                              <span className="bg-white border border-[#E5E7EB] text-[#111827] text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">{item.Horário}</span>
+                            </div>
+                            <p className="font-bold text-sm text-[#0D2E5A] mb-1">{item.Compromisso}</p>
+                            <p className="text-xs text-[#6B7280]">{item.Local}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* PENDENTES */}
+              <div className="md:col-span-8 bg-[#F5C400] rounded-xl p-6 md:p-10 flex flex-col justify-between min-h-[300px] swiss-shadow relative overflow-hidden">
+                <img src={LOGO_ICON} className="absolute -right-10 -bottom-10 w-[300px] h-[300px] opacity-10 grayscale pointer-events-none" alt="" />
+                
+                <div className="relative z-10">
+                  <p className="font-display swiss-eyebrow text-[#0D2E5A] mb-4">Ação Requerida</p>
+                  <div className="font-display font-black text-6xl md:text-8xl text-[#0D2E5A] swiss-stat mb-2">
+                    {pendingDocs.length < 10 ? `0${pendingDocs.length}` : pendingDocs.length}
+                  </div>
+                  <h2 className="font-display font-bold text-xl md:text-2xl text-[#0D2E5A] tracking-tight">Documentos Pendentes</h2>
+                </div>
+                
+                <div className="mt-8 space-y-3 relative z-10">
+                  {loading && <i className="ph ph-spinner animate-spin text-[#0D2E5A] text-3xl"></i>}
+                  {!loading && pendingDocs.length === 0 && (
+                    <div className="bg-white/50 backdrop-blur rounded p-4 flex items-center gap-3"><div className="bg-[#1E8A4A] rounded-full p-1 text-white"><i className="ph ph-check text-sm"></i></div><p className="text-[#0D2E5A] text-sm font-semibold">Gabinete em dia.</p></div>
+                  )}
+                  {!loading && pendingDocs.map(doc => (
+                    <div key={doc.ID} className="bg-white/90 backdrop-blur border border-white/20 rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm hover:shadow-md transition-all">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-display uppercase tracking-wider text-[#1B6CB5] bg-[#1B6CB5]/10 px-2 py-0.5 rounded">{doc.Tipo}</span>
+                          {doc.Urgente && doc.Urgente.toUpperCase() === 'SIM' && (
+                            <span className="text-[9px] font-display font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded flex items-center gap-1 uppercase"><i className="ph ph-warning-circle"></i> Urgente</span>
+                          )}
+                        </div>
+                        <p className="text-base font-bold text-[#0D2E5A] leading-tight mb-1">{doc.Título}</p>
+                        <p className="text-[11px] text-[#6B7280] flex items-center gap-1"><i className="ph ph-clock"></i> {doc.Data}</p>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 md:w-auto w-full">
+                        {doc.LinkArquivo && <a href={doc.LinkArquivo} target="_blank" rel="noopener noreferrer" className="flex-1 text-center border border-[#E5E7EB] text-[#0D2E5A] text-xs font-display font-bold uppercase px-4 py-2.5 rounded hover:bg-[#F7F8FA]">Ver</a>}
+                        <button onClick={() => handleStatusUpdate(doc.ID, 'Documentos', 'Assinado')} className="flex-1 bg-[#1B6CB5] text-white text-xs font-display font-bold uppercase px-4 py-2.5 rounded hover:bg-[#0D2E5A] transition-colors">Assinar</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* MENSAGENS */}
+              <div className="md:col-span-4 bg-[#0D2E5A] rounded-xl p-6 md:p-10 flex flex-col swiss-shadow">
+                <div className="flex justify-between items-start mb-6">
+                  <p className="font-display swiss-eyebrow text-[#F5C400]">Comunicações</p>
+                  {newMessages.length > 0 && <span className="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full animate-pulse">{newMessages.length} NOVAS</span>}
+                </div>
+                
+                <div className="flex-1 flex flex-col gap-4">
+                  {loading && <i className="ph ph-spinner animate-spin text-white text-2xl"></i>}
+                  {!loading && data.mensagens.length === 0 && <p className="text-white/50 text-sm">Nenhuma correspondência.</p>}
+                  {!loading && [...newMessages, ...oldMessages].map(msg => {
+                    const isNew = msg.Status && msg.Status.toUpperCase() === 'NOVA';
+                    return (
+                      <div key={msg.ID} className={`border-b border-white/10 pb-4 last:border-0 relative ${isNew ? 'opacity-100' : 'opacity-50'}`}>
+                        {isNew && <div className="absolute top-1 right-0 w-2 h-2 rounded-full bg-[#F5C400]"></div>}
+                        <span className="text-[10px] text-white/50 font-bold tracking-wider">{msg.Data}</span>
+                        <p className="text-sm font-semibold text-white mt-0.5">{msg.Remetente}</p>
+                        <p className="text-xs text-white/70 mt-0.5">{msg.Assunto}</p>
+                        {isNew && <button onClick={() => handleStatusUpdate(msg.ID, 'Mensagens', 'Lida')} className="mt-2 text-[9px] font-display font-bold uppercase tracking-widest text-[#F5C400] border border-[#F5C400]/30 px-2 py-1 rounded hover:bg-[#F5C400]/10 transition-colors">Marcar como Lida</button>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ACERVO */}
+              <div className="md:col-span-12 bg-white border border-[#E5E7EB] rounded-xl p-6 md:p-8 mt-2 swiss-shadow">
+                <div className="flex justify-between items-end mb-6 border-b border-[#E5E7EB] pb-4">
+                  <div>
+                    <p className="font-display swiss-eyebrow text-[#1B6CB5] mb-1">Acervo Histórico</p>
+                    <h2 className="font-display font-bold text-xl text-[#111827]">Documentos Processados</h2>
+                  </div>
+                </div>
+                {loading ? <div className="py-6 flex justify-center"><i className="ph ph-spinner animate-spin text-[#1B6CB5] text-2xl"></i></div>
+                : archiveDocs.length === 0 ? <p className="text-sm text-[#6B7280] py-4">Nenhum documento finalizado ainda.</p>
+                : <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {archiveDocs.map(doc => (
+                      <div key={doc.ID} className="flex gap-3 items-start p-3 border border-[#E5E7EB] rounded-lg bg-[#F7F8FA] hover:border-[#1B6CB5] transition-colors">
+                        <div className="bg-[#1E8A4A] p-1.5 rounded-full text-white shrink-0"><i className="ph ph-check text-xs"></i></div>
+                        <div className="overflow-hidden flex-1">
+                          <p className="text-sm font-semibold text-[#111827] truncate" title={doc.Título}>{doc.Título}</p>
+                          <div className="flex justify-between items-center mt-1">
+                            <p className="text-[10px] text-[#6B7280] font-display tracking-wide uppercase">{doc.Tipo} · {doc.Data}</p>
+                            {doc.LinkArquivo && <a href={doc.LinkArquivo} target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#1B6CB5] font-bold uppercase hover:underline">Ver</a>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>}
+              </div>
+
+            </div>
+          </main>
+
+          {/* FAB - UPLOAD */}
+          <button onClick={() => setUploadModalOpen(true)} className="fixed bottom-6 right-6 w-14 h-14 bg-[#1B6CB5] text-white rounded-full flex items-center justify-center swiss-shadow hover:bg-[#0D2E5A] transition-transform hover:scale-105 z-40">
+            <i className="ph ph-cloud-arrow-up text-3xl"></i>
+          </button>
+
+          {/* MODAL DE UPLOAD */}
+          {uploadModalOpen && (
+            <div className="fixed inset-0 bg-[#111827]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden animate-slide-down shadow-2xl">
+                <div className="bg-[#0D2E5A] p-4 flex justify-between items-center">
+                  <h3 className="font-display font-bold text-white uppercase tracking-widest text-xs flex items-center gap-2">
+                    <i className="ph ph-file-text text-lg"></i> Enviar ao Gabinete
+                  </h3>
+                  <button onClick={() => setUploadModalOpen(false)} className="text-white/60 hover:text-white" disabled={uploading}><i className="ph ph-x text-xl"></i></button>
+                </div>
+                
+                <form onSubmit={handleUpload} className="p-6">
+                  <div className="mb-4">
+                    <label className="block text-xs font-bold text-[#0D2E5A] mb-1 font-display uppercase tracking-wider">Título do Documento</label>
+                    <input type="text" required value={formDoc.titulo} onChange={e => setFormDoc({...formDoc, titulo: e.target.value})} className="w-full border border-[#E5E7EB] rounded-lg p-2.5 text-sm focus:outline-none focus:border-[#1B6CB5]" placeholder="Ex: Ofício 123/2026" disabled={uploading} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-xs font-bold text-[#0D2E5A] mb-1 font-display uppercase tracking-wider">Tipo</label>
+                      <select value={formDoc.tipo} onChange={e => setFormDoc({...formDoc, tipo: e.target.value})} className="w-full border border-[#E5E7EB] rounded-lg p-2.5 text-sm focus:outline-none focus:border-[#1B6CB5]" disabled={uploading}>
+                        <option value="ATA">Ata</option>
+                        <option value="RESOLUÇÃO">Resolução</option>
+                        <option value="OFÍCIO">Ofício</option>
+                        <option value="REGIMENTO">Regimento</option>
+                        <option value="OUTROS">Outros</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[#0D2E5A] mb-1 font-display uppercase tracking-wider">Prioridade</label>
+                      <select value={formDoc.urgente} onChange={e => setFormDoc({...formDoc, urgente: e.target.value})} className="w-full border border-[#E5E7EB] rounded-lg p-2.5 text-sm focus:outline-none focus:border-[#1B6CB5]" disabled={uploading}>
+                        <option value="NÃO">Normal</option>
+                        <option value="SIM">Urgente</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="mb-6 relative">
+                    <input type="file" ref={fileInputRef} required accept=".pdf,.doc,.docx" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={uploading} />
+                    <div className="border-2 border-dashed border-[#1B6CB5]/30 rounded-xl p-6 text-center bg-[#F7F8FA] hover:bg-[#1B6CB5]/5 transition-colors">
+                      <i className="ph ph-cloud-arrow-up text-4xl text-[#1B6CB5] mb-2"></i>
+                      <p className="text-sm font-semibold text-[#0D2E5A]">Clique para escolher o arquivo</p>
+                      <p className="text-xs text-[#6B7280] mt-1">PDF, DOC ou DOCX</p>
+                    </div>
+                  </div>
+                  <button type="submit" disabled={uploading} className="w-full bg-[#F5C400] text-[#0D2E5A] font-display font-bold tracking-widest uppercase py-3 rounded-lg hover:brightness-105 transition-all text-xs flex items-center justify-center gap-2 disabled:opacity-50">
+                    {uploading ? <><i className="ph ph-spinner animate-spin text-lg"></i> Salvando...</> : 'Enviar para Assinatura'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
